@@ -4,7 +4,6 @@
   "description": "TMF622 Product Ordering mock server (Prism on Vercel)",
   "main": "api/index.js",
   "scripts": {
-    "dev": "vercel dev",
     "test": "node scripts/smoke.js"
   },
   "keywords": [],
