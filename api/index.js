@@ -132,7 +132,10 @@ module.exports = async (req, res) => {
     else res.json(response.data);
   } catch (error) {
     const status = error.status || 500;
-    logger.error({ err: error, url: req.url }, 'request failed');
+    // A 4xx is the mock behaving correctly (unrouted path, failed validation);
+    // only a 5xx is our problem, so don't drown the logs in expected errors.
+    const log = status >= 500 ? logger.error : logger.debug;
+    log({ err: error, url: req.url }, 'request failed');
     res.status(status).json({
       type: error.type || 'https://stoplight.io/prism/errors#UNKNOWN',
       title: error.name || 'Internal Server Error',
