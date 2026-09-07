@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "tmf": {
+      "command": "node",
+      "args": ["./scripts/mcp.js"]
+    }
+  }
+}

@@ -12,6 +12,9 @@ const http = require('http');
 const $RefParser = require('@stoplight/json-schema-ref-parser');
 const handler = require('../api/index.js');
 const rawSpec = require('../tmf-spec.json');
+const { listTools, callTool } = require('../lib/tools.js');
+const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
+const { StdioClientTransport } = require('@modelcontextprotocol/sdk/client/stdio.js');
 
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'];
 const SAMPLE_ID = '1234';
@@ -162,20 +165,89 @@ async function run(title, cases, width) {
   return failed;
 }
 
+// Every operation again, this time through the MCP tool layer rather than HTTP.
+async function runMcpTools(spec, width) {
+  console.log(`\nMCP tools (${listTools().length})`);
+  let failed = 0;
+
+  for (const [pathKey, item] of Object.entries(spec.paths)) {
+    for (const method of METHODS) {
+      const op = item[method];
+      if (!op || !op.operationId) continue;
+
+      const args = {};
+      for (const param of op.parameters || []) {
+        if (param.in === 'path') args[param.name] = SAMPLE_ID;
+        else if (param.in === 'body') args.body = minimalBody(param.schema);
+      }
+
+      const expect = successCode(op.responses);
+      const started = Date.now();
+      const result = await callTool(op.operationId, args);
+      const ok = result.status === expect;
+      if (!ok) failed++;
+      console.log(
+        `  ${ok ? 'ok  ' : 'FAIL'} ${op.operationId.padEnd(width)} ` +
+        `${String(result.status).padEnd(3)} ` +
+        `${ok ? `${Date.now() - started}ms` : `(expected ${expect})`}`
+      );
+    }
+  }
+  return failed;
+}
+
+// The tool layer is reachable in-process; this proves the stdio transport
+// actually speaks MCP, which is the part a client depends on.
+async function runStdioTransport(width) {
+  console.log('\nMCP stdio transport (2)');
+  const client = new Client({ name: 'smoke', version: '1.0.0' }, { capabilities: {} });
+  let failed = 0;
+  try {
+    await client.connect(new StdioClientTransport({
+      command: process.execPath,
+      args: [require.resolve('./mcp.js')],
+      stderr: 'ignore',
+    }));
+
+    const { tools } = await client.listTools();
+    const listOk = tools.length === listTools().length;
+    if (!listOk) failed++;
+    console.log(`  ${listOk ? 'ok  ' : 'FAIL'} ${'tools/list'.padEnd(width)} ${tools.length} tools`);
+
+    const res = await client.callTool({
+      name: 'retrieveProductOrder',
+      arguments: { id: SAMPLE_ID, prefer: 'code=409' },
+    });
+    const status = JSON.parse(res.content[0].text).status;
+    const callOk = status === 409;
+    if (!callOk) failed++;
+    console.log(`  ${callOk ? 'ok  ' : 'FAIL'} ${'tools/call (Prefer)'.padEnd(width)} ${status}`);
+
+    await client.close();
+  } catch (err) {
+    console.log(`  FAIL ${'stdio transport'.padEnd(width)} ${err.message}`);
+    failed += 2;
+  }
+  return failed;
+}
+
 (async () => {
   const spec = await new $RefParser().dereference(JSON.parse(JSON.stringify(rawSpec)));
   const operations = specCases(spec);
   const width = Math.max(
-    ...[...operations, ...BEHAVIOUR_CASES].map(c => c.name.length)
+    ...[...operations, ...BEHAVIOUR_CASES].map(c => c.name.length),
+    ...listTools().map(t => t.name.length)
   );
 
   await new Promise(resolve => server.listen(0, resolve));
 
   const failed =
-    await run(`Spec operations (${operations.length})`, operations, width) +
-    await run(`Behaviour (${BEHAVIOUR_CASES.length})`, BEHAVIOUR_CASES, width);
+    await run(`REST operations (${operations.length})`, operations, width) +
+    await run(`REST behaviour (${BEHAVIOUR_CASES.length})`, BEHAVIOUR_CASES, width) +
+    await runMcpTools(spec, width) +
+    await runStdioTransport(width);
 
-  const total = operations.length + BEHAVIOUR_CASES.length;
+  const total = operations.length + BEHAVIOUR_CASES.length + listTools().length + 2;
   console.log(`\n${total - failed}/${total} passed\n`);
   server.close();
   process.exit(failed ? 1 : 0);

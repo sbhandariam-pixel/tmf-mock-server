@@ -11,6 +11,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@stoplight/prism-core": "^5.8.0",
     "@stoplight/prism-http": "^5.12.0"
   },
