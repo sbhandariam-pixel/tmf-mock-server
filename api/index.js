@@ -28,18 +28,15 @@ module.exports = async (req, res) => {
     return;
   }
 
-  // 3. Extract path safely from Vercel's request object
-  // req.url might look like "/productOrder?id=123", we only want the path part before the "?"
-  const [pathName] = req.url.split('?');
-
   try {
-    // 4. Feed the cleaned request attributes into Prism
+    // 3. Construct a valid target URL string for Prism
+    // Pass the raw Vercel req.url directly as the path, ensuring it is never undefined
+    const cleanUrl = req.url || '/';
+
+    // 4. Feed the standardized request attributes into Prism
     const response = await prism.request({
       method: req.method.toLowerCase(),
-      url: {
-        path: pathName || '/',
-        query: req.query || {},
-      },
+      url: cleanUrl, // Prism safely extracts path/query string internally from a single string
       headers: req.headers,
       body: req.body,
     });
