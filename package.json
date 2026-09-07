@@ -1,10 +1,11 @@
 {
   "name": "tmf-mock-server",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "TMF622 Product Ordering mock server (Prism on Vercel)",
+  "main": "api/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "vercel dev",
+    "test": "node scripts/smoke.js"
   },
   "keywords": [],
   "author": "",
@@ -12,8 +13,9 @@
   "type": "commonjs",
   "dependencies": {
     "@stoplight/prism-core": "^5.8.0",
-    "@stoplight/prism-http": "^5.12.0",
-    "fs": "^0.0.1-security",
-    "path": "^0.12.7"
+    "@stoplight/prism-http": "^5.12.0"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
