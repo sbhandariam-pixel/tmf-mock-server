@@ -2,49 +2,51 @@ const { createInstance } = require('@stoplight/prism-http');
 const fs = require('fs');
 const path = require('path');
 
-// 1. Load the TM Forum specification file
+// 1. Load the TM Forum specification file safely
 const specPath = path.join(process.cwd(), 'tmf-spec.json');
-const specContent = fs.readFileSync(specPath, 'utf-8');
-const operations = JSON.parse(specContent);
+let operations;
+try {
+  const specContent = fs.readFileSync(specPath, 'utf-8');
+  operations = JSON.parse(specContent);
+} catch (e) {
+  console.error("Failed to read tmf-spec.json:", e);
+}
 
 // 2. Initialize the Prism engine instance
 const prism = createInstance(operations, {
-  mock: { dynamic: false } // Set to true if you want randomized data instead of static examples
+  mock: { dynamic: false } 
 });
 
 module.exports = async (req, res) => {
-  // CORS Headers to allow your frontend apps to connect to this mock
+  // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  // Handle preflight OPTIONS requests immediately
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
 
-  // 3. Reconstruct the full path and query string for Prism
-  const urlParams = req.url.split('?');
-  const pathName = urlParams[0];
-  const queryString = urlParams[1] ? `?${urlParams[1]}` : '';
+  // 3. Extract path safely from Vercel's request object
+  // req.url might look like "/productOrder?id=123", we only want the path part before the "?"
+  const [pathName] = req.url.split('?');
 
   try {
-    // 4. Run the request through Prism's routing and mock engine
+    // 4. Feed the cleaned request attributes into Prism
     const response = await prism.request({
       method: req.method.toLowerCase(),
       url: {
-        path: pathName,
-        query: req.query,
+        path: pathName || '/',
+        query: req.query || {},
       },
       headers: req.headers,
       body: req.body,
     });
 
     // 5. Send Prism's generated response back to the client
-    res.status(response.status);
+    res.status(response.status || 200);
     
-    // Set headers returned by Prism
     if (response.headers) {
       Object.entries(response.headers).forEach(([key, value]) => {
         res.setHeader(key, value);
